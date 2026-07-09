@@ -53,11 +53,16 @@ export interface QuerySpec {
 export type WidgetType =
   | "kpi"
   | "bar"
+  | "hbar"
+  | "stacked-bar"
   | "line"
   | "area"
   | "pie"
   | "donut"
   | "scatter"
+  | "treemap"
+  | "heatmap"
+  | "funnel"
   | "table";
 
 export interface WidgetSpec {
@@ -68,6 +73,8 @@ export interface WidgetSpec {
   /** Grid width out of 12 columns. */
   span: number;
   format?: "number" | "currency" | "percent";
+  /** Date column powering a KPI sparkline + month-over-month delta. */
+  trendColumn?: string;
 }
 
 export interface DashboardSpec {

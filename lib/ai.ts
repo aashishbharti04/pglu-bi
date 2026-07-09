@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+﻿import Anthropic from "@anthropic-ai/sdk";
 import type {
   DashboardSpec,
   DatasetMeta,
@@ -8,6 +8,7 @@ import type {
 import { runQuery } from "./query";
 import { newId } from "./id";
 import { getApiKey } from "./clientStore";
+import { buildTemplate } from "./templates";
 
 const MODEL = "claude-opus-4-8";
 
@@ -47,10 +48,29 @@ const WIDGET_SCHEMA = {
     title: { type: "string" },
     type: {
       type: "string",
-      enum: ["kpi", "bar", "line", "area", "pie", "donut", "scatter", "table"],
+      enum: [
+        "kpi",
+        "bar",
+        "hbar",
+        "stacked-bar",
+        "line",
+        "area",
+        "pie",
+        "donut",
+        "scatter",
+        "treemap",
+        "heatmap",
+        "funnel",
+        "table",
+      ],
     },
     span: { type: "integer", enum: [3, 4, 6, 8, 12] },
     format: { type: "string", enum: ["number", "currency", "percent"] },
+    trendColumn: {
+      type: "string",
+      description:
+        "For KPI widgets only: a date column that powers a sparkline and month-over-month delta on the card.",
+    },
     query: QUERY_SCHEMA,
   },
   required: ["title", "type", "span", "query"],
@@ -152,9 +172,13 @@ const DESIGN_RULES = `
 Widget design rules:
 - The grid is 12 columns wide. KPI cards use span 3; charts use span 6; a primary hero chart may use span 12; tables use span 6 or 12.
 - Start with 3-4 KPI cards for the headline totals, then 3-5 charts.
+- On KPI widgets, set trendColumn to a date column (when one exists) to show a sparkline with month-over-month delta.
 - Use "line" or "area" over a date dimension for change over time (set timeGrain, usually "month").
-- Use "bar" for comparing categories (sorted desc, limit to the top 8-12).
+- Use "bar" for comparing categories (sorted desc, limit to the top 8-12); "hbar" when there are many categories or long labels.
+- Use "stacked-bar" for composition across categories (requires series).
 - Use "pie"/"donut" only when a dimension has 6 or fewer meaningful values and parts-of-a-whole is the point.
+- Use "treemap" for share-of-total across 8-15 categories; "funnel" only for genuinely stage-like dimensions.
+- Use "heatmap" for dimension x series intensity (requires both dimension and series, e.g. month x region).
 - Use "scatter" only when two numeric measures plausibly correlate (measure = y axis, measure2 = x axis).
 - Only reference column names that exist in the dataset, exactly as spelled.
 - "measure" must be a numeric column; "dimension" and "series" must be string or date columns.
@@ -184,82 +208,36 @@ function sanitizeWidgets(
     if (q.measure2 && colTypes.get(q.measure2) !== "number") continue;
     // Aggregations other than count/distinct need a measure
     if (!q.measure && !["count", "distinct"].includes(q.agg)) continue;
+    // Heatmaps need both axes; downgrade to bar rather than dropping
+    const type = w.type === "heatmap" && !q.series ? "bar" : w.type;
+    // Trend sparklines only make sense on a date column
+    const trendColumn =
+      w.trendColumn && colTypes.get(w.trendColumn) === "date"
+        ? w.trendColumn
+        : undefined;
     const span = [3, 4, 6, 8, 12].includes(w.span) ? w.span : 6;
-    valid.push({ ...w, span, id: newId() });
+    valid.push({ ...w, type, trendColumn, span, id: newId() });
   }
   return valid;
 }
 
 // ---------- Heuristic fallback (no API key) ----------
 
-export function heuristicDashboard(meta: DatasetMeta): {
+export function heuristicDashboard(
+  meta: DatasetMeta,
+  rows: Row[]
+): {
   name: string;
   widgets: WidgetSpec[];
   insights: string[];
 } {
-  const numeric = meta.columns.filter((c) => c.type === "number");
-  const categorical = meta.columns.filter(
-    (c) => c.type === "string" && c.distinctCount > 1 && c.distinctCount <= 50
-  );
-  const dates = meta.columns.filter((c) => c.type === "date");
-  const widgets: WidgetSpec[] = [];
-
-  widgets.push({
-    id: newId(),
-    title: "Total rows",
-    type: "kpi",
-    span: 3,
-    query: { agg: "count" },
-    format: "number",
-  });
-  for (const col of numeric.slice(0, 3)) {
-    widgets.push({
-      id: newId(),
-      title: `Total ${col.name}`,
-      type: "kpi",
-      span: 3,
-      query: { measure: col.name, agg: "sum" },
-      format: "number",
-    });
-  }
-  const primary = numeric[0];
-  if (dates[0] && primary) {
-    widgets.push({
-      id: newId(),
-      title: `${primary.name} over time`,
-      type: "line",
-      span: 12,
-      query: {
-        dimension: dates[0].name,
-        timeGrain: "month",
-        measure: primary.name,
-        agg: "sum",
-        sort: "time",
-      },
-    });
-  }
-  for (const dim of categorical.slice(0, 2)) {
-    if (!primary) break;
-    widgets.push({
-      id: newId(),
-      title: `${primary.name} by ${dim.name}`,
-      type: dim.distinctCount <= 6 ? "donut" : "bar",
-      span: 6,
-      query: {
-        dimension: dim.name,
-        measure: primary.name,
-        agg: "sum",
-        sort: "desc",
-        limit: 10,
-      },
-    });
-  }
+  const built = buildTemplate("executive", meta, rows);
   return {
+    ...built,
     name: meta.name.replace(/\.[^.]+$/, ""),
-    widgets,
     insights: [
-      `Loaded ${meta.rowCount.toLocaleString()} rows with ${meta.columns.length} columns.`,
-      "Add your Anthropic API key on the home page to enable AI-generated dashboards, insights, and chat editing.",
+      ...built.insights,
+      "Add your Anthropic API key on the home page to enable AI-designed dashboards, richer insights, and chat editing.",
     ],
   };
 }
@@ -290,19 +268,19 @@ export async function generateDashboard(
   meta: DatasetMeta,
   rows: Row[]
 ): Promise<{ name: string; widgets: WidgetSpec[]; insights: string[] }> {
-  if (!aiEnabled()) return heuristicDashboard(meta);
+  if (!aiEnabled()) return heuristicDashboard(meta, rows);
   try {
     const result = await callStructured(
       `You are a senior BI analyst. Given a dataset profile, design the dashboard a business stakeholder would actually want: headline KPIs, the most decision-relevant charts, and concrete insights.\n${DESIGN_RULES}`,
       `${datasetPrompt(meta, rows)}\n\nDesign the dashboard now.`,
       DASHBOARD_SCHEMA
     );
-    if (!result) return heuristicDashboard(meta);
+    if (!result) return heuristicDashboard(meta, rows);
     const widgets = sanitizeWidgets(
       (result.widgets as Omit<WidgetSpec, "id">[]) ?? [],
       meta
     );
-    if (widgets.length === 0) return heuristicDashboard(meta);
+    if (widgets.length === 0) return heuristicDashboard(meta, rows);
     return {
       name: (result.name as string) || meta.name,
       widgets,
@@ -310,7 +288,7 @@ export async function generateDashboard(
     };
   } catch (err) {
     console.error("AI dashboard generation failed, using fallback:", err);
-    return heuristicDashboard(meta);
+    return heuristicDashboard(meta, rows);
   }
 }
 

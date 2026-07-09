@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { DashboardSpec } from "@/lib/types";
+import type { DashboardSpec, DatasetMeta, Row } from "@/lib/types";
 import { parseFile, profileDataset } from "@/lib/parse";
-import { generateDashboard } from "@/lib/ai";
+import { aiEnabled, generateDashboard } from "@/lib/ai";
+import { buildTemplate, TEMPLATES, type TemplateId } from "@/lib/templates";
+import { parseBundle } from "@/lib/export";
 import {
   deleteDashboard,
   getApiKey,
@@ -16,13 +18,17 @@ import {
 } from "@/lib/clientStore";
 import { newId } from "@/lib/id";
 
-type Phase = "idle" | "parsing" | "generating";
+type Phase = "idle" | "parsing" | "choose" | "generating";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 export default function Home() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
+  const [pending, setPending] = useState<{
+    meta: DatasetMeta;
+    rows: Row[];
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [dashboards, setDashboards] = useState<DashboardSpec[]>([]);
@@ -39,17 +45,42 @@ export default function Home() {
       setError(null);
       setPhase("parsing");
       try {
+        if (filename.endsWith(".pglu.json")) {
+          // Shared dashboard bundle — restore it directly
+          const bundle = parseBundle(new TextDecoder().decode(data));
+          saveDataset(bundle.dataset.meta, bundle.dataset.rows);
+          saveDashboard(bundle.dashboard);
+          router.push(`/dashboard?id=${bundle.dashboard.id}`);
+          return;
+        }
         const rows = parseFile(data, filename);
-        if (rows.length === 0) throw new Error("The file contains no data rows");
+        if (rows.length === 0)
+          throw new Error("The file contains no data rows");
         const datasetId = newId();
         const meta = profileDataset(datasetId, filename, rows);
         saveDataset(meta, rows);
+        setPending({ meta, rows });
+        setPhase("choose");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+        setPhase("idle");
+      }
+    },
+    [router]
+  );
 
-        setPhase("generating");
-        const generated = await generateDashboard(meta, rows);
+  const create = useCallback(
+    async (choice: "ai" | TemplateId) => {
+      if (!pending) return;
+      setPhase("generating");
+      try {
+        const generated =
+          choice === "ai"
+            ? await generateDashboard(pending.meta, pending.rows)
+            : buildTemplate(choice, pending.meta, pending.rows);
         const dashboard: DashboardSpec = {
           id: newId(),
-          datasetId,
+          datasetId: pending.meta.id,
           createdAt: new Date().toISOString(),
           ...generated,
         };
@@ -57,10 +88,10 @@ export default function Home() {
         router.push(`/dashboard?id=${dashboard.id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
-        setPhase("idle");
+        setPhase("choose");
       }
     },
-    [router]
+    [pending, router]
   );
 
   const handleFile = useCallback(
@@ -78,56 +109,105 @@ export default function Home() {
       <header className="home-header">
         <h1>Pglu BI</h1>
         <p className="muted">
-          Upload a data file — AI profiles it, builds a dashboard, and lets you
-          refine it by chat. Everything stays in your browser.
+          Upload a data file — pick a template or let AI design the dashboard,
+          then refine it by chat. Everything stays in your browser.
         </p>
       </header>
 
-      <label
-        className={`dropzone ${dragOver ? "dropzone-active" : ""} ${
-          phase !== "idle" ? "dropzone-busy" : ""
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          const file = e.dataTransfer.files[0];
-          if (file && phase === "idle") handleFile(file);
-        }}
-      >
-        <input
-          type="file"
-          accept=".csv,.tsv,.txt,.xlsx,.xls,.json"
-          hidden
-          disabled={phase !== "idle"}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFile(file);
-            e.target.value = "";
-          }}
-        />
-        {phase === "idle" && (
-          <>
-            <div className="dropzone-title">Drop a file or click to browse</div>
-            <div className="muted">CSV, Excel (.xlsx), or JSON</div>
-          </>
-        )}
-        {phase === "parsing" && (
-          <div className="dropzone-title">Parsing and profiling data…</div>
-        )}
-        {phase === "generating" && (
-          <div className="dropzone-title">Designing your dashboard…</div>
-        )}
-      </label>
+      {phase === "choose" && pending ? (
+        <section className="template-picker">
+          <div className="template-picker-head">
+            <h2>
+              {pending.meta.name} ·{" "}
+              {pending.meta.rowCount.toLocaleString()} rows
+            </h2>
+            <p className="muted">Choose how to build the dashboard:</p>
+          </div>
+          <div className="template-grid">
+            <button className="template-card template-ai" onClick={() => create("ai")}>
+              <span className="template-icon">✨</span>
+              <span className="template-name">AI designed</span>
+              <span className="template-desc muted">
+                {aiEnabled()
+                  ? "Claude picks the best layout, charts, and insights for this data."
+                  : "No API key set — falls back to the Executive template."}
+              </span>
+            </button>
+            {TEMPLATES.map((t) => (
+              <button
+                key={t.id}
+                className="template-card"
+                onClick={() => create(t.id)}
+              >
+                <span className="template-icon">{t.icon}</span>
+                <span className="template-name">{t.name}</span>
+                <span className="template-desc muted">{t.description}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            className="link-btn"
+            onClick={() => {
+              setPending(null);
+              setPhase("idle");
+            }}
+          >
+            ← Choose a different file
+          </button>
+        </section>
+      ) : (
+        <>
+          <label
+            className={`dropzone ${dragOver ? "dropzone-active" : ""} ${
+              phase !== "idle" ? "dropzone-busy" : ""
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const file = e.dataTransfer.files[0];
+              if (file && phase === "idle") handleFile(file);
+            }}
+          >
+            <input
+              type="file"
+              accept=".csv,.tsv,.txt,.xlsx,.xls,.json"
+              hidden
+              disabled={phase !== "idle"}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+                e.target.value = "";
+              }}
+            />
+            {phase === "idle" && (
+              <>
+                <div className="dropzone-title">
+                  Drop a file or click to browse
+                </div>
+                <div className="muted">
+                  CSV, Excel (.xlsx), JSON, or an exported .pglu.json bundle
+                </div>
+              </>
+            )}
+            {phase === "parsing" && (
+              <div className="dropzone-title">Parsing and profiling data…</div>
+            )}
+            {phase === "generating" && (
+              <div className="dropzone-title">Designing your dashboard…</div>
+            )}
+          </label>
 
-      {phase === "idle" && (
-        <button className="sample-btn" onClick={trySample}>
-          Or try it with sample sales data →
-        </button>
+          {phase === "idle" && (
+            <button className="sample-btn" onClick={trySample}>
+              Or try it with sample sales data →
+            </button>
+          )}
+        </>
       )}
 
       {error && <p className="error-text">{error}</p>}

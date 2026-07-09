@@ -13,6 +13,10 @@ export interface VizTheme {
   axis: string;
   border: string;
   series: string[];
+  /** One-hue ramp for magnitude (heatmaps); low → recedes toward surface. */
+  sequential: string[];
+  good: string;
+  bad: string;
 }
 
 export const light: VizTheme = {
@@ -34,6 +38,17 @@ export const light: VizTheme = {
     "#e87ba4", // magenta
     "#eb6834", // orange
   ],
+  sequential: [
+    "#cde2fb",
+    "#9ec5f4",
+    "#6da7ec",
+    "#3987e5",
+    "#256abf",
+    "#184f95",
+    "#0d366b",
+  ],
+  good: "#006300",
+  bad: "#d03b3b",
 };
 
 export const dark: VizTheme = {
@@ -55,6 +70,18 @@ export const dark: VizTheme = {
     "#d55181",
     "#d95926",
   ],
+  // Low values sit near the dark surface; high values brighten.
+  sequential: [
+    "#0d366b",
+    "#184f95",
+    "#256abf",
+    "#3987e5",
+    "#6da7ec",
+    "#9ec5f4",
+    "#cde2fb",
+  ],
+  good: "#0ca30c",
+  bad: "#e66767",
 };
 
 export function getTheme(isDark: boolean): VizTheme {

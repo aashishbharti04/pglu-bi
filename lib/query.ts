@@ -9,25 +9,37 @@ import type {
   WidgetType,
 } from "./types";
 
+/** Ordered comparison that works for numbers and date strings alike. */
+function compare(v: unknown, target: unknown): number | null {
+  const a = Number(v);
+  const b = Number(target);
+  if (Number.isFinite(a) && Number.isFinite(b)) return a - b;
+  const da = Date.parse(String(v));
+  const db = Date.parse(String(target));
+  if (!Number.isNaN(da) && !Number.isNaN(db)) return da - db;
+  return null;
+}
+
 function applyFilters(rows: Row[], filters?: Filter[]): Row[] {
   if (!filters || filters.length === 0) return rows;
   return rows.filter((row) =>
     filters.every((f) => {
       const v = row[f.column];
       if (v === null || v === undefined) return false;
+      const c = () => compare(v, f.value as string | number);
       switch (f.op) {
         case "eq":
           return String(v) === String(f.value);
         case "neq":
           return String(v) !== String(f.value);
         case "gt":
-          return Number(v) > Number(f.value);
+          return (c() ?? -1) > 0;
         case "gte":
-          return Number(v) >= Number(f.value);
+          return (c() ?? -1) >= 0;
         case "lt":
-          return Number(v) < Number(f.value);
+          return (c() ?? 1) < 0;
         case "lte":
-          return Number(v) <= Number(f.value);
+          return (c() ?? 1) <= 0;
         case "contains":
           return String(v).toLowerCase().includes(String(f.value).toLowerCase());
         case "in":

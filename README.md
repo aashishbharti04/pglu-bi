@@ -8,9 +8,18 @@ AI-first business intelligence: upload a data file, get an interactive dashboard
 
 1. Drop a CSV, Excel (.xlsx), or JSON file — or click "try it with sample sales data".
 2. The browser parses and profiles it (column types, stats, distinct values).
-3. Claude designs a dashboard — KPI cards, charts, and written insights grounded in precomputed aggregates.
+3. Pick a **template** (Executive Overview, Sales Performance, Trends & Time Series, Category Breakdown, Data Explorer) or let **Claude design** the dashboard with insights grounded in precomputed aggregates.
 4. Every widget runs live queries against the dataset through a structured query engine.
 5. The Copilot panel edits the dashboard conversationally ("break revenue down by region", "make this a line chart") or answers questions about the data.
+
+**Features**
+
+- 13 widget types: KPI (with trend sparkline + MoM delta), bar, horizontal bar, stacked bar, line, area, pie, donut, scatter, treemap, heatmap, funnel, table
+- Global filter bar — dimension dropdowns + date range applied to every widget live
+- Per-widget menu: switch chart type, resize, duplicate, delete, download CSV or PNG
+- Drag widgets to reorder; switch templates on an existing dashboard at any time
+- Export a dashboard + data as a `.pglu.json` bundle and re-import it anywhere
+- Light / dark / system theme toggle with separately tuned chart palettes
 
 Everything runs **in your browser**: datasets and dashboards persist in localStorage, and nothing is uploaded to any server. AI features call the Anthropic API directly from the browser using a key you paste on the home page (stored only in your localStorage, sent only to Anthropic). Without a key, a rule-based generator still produces a working dashboard.
 
