@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pglu BI
 
-## Getting Started
+AI-first business intelligence: upload a data file, get an interactive dashboard, refine it by chat.
 
-First, run the development server:
+**The core workflow**
+
+1. Drop a CSV, Excel (.xlsx), or JSON file on the home page.
+2. The server parses and profiles it (column types, stats, distinct values).
+3. Claude designs a dashboard — KPI cards, charts, and written insights grounded in precomputed aggregates.
+4. Every widget runs live queries against the dataset through a structured query engine.
+5. The Copilot panel edits the dashboard conversationally ("break revenue down by region", "make this a line chart") or answers questions about the data.
+
+## Setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open http://localhost:3000 and drop a file — `sample-data/sales.csv` is included to try.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Enabling AI
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Add your Anthropic API key to `.env.local`:
 
-## Learn More
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
-To learn more about Next.js, take a look at the following resources:
+Without a key the app still works end-to-end using a rule-based dashboard generator, but AI-designed layouts, insights, and chat editing need the key. The AI layer uses Claude (`claude-opus-4-8`) with structured JSON output, so dashboard specs are always schema-valid.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Next.js 16 (App Router)** — single codebase, API routes for the backend.
+- **Datasets** are parsed with PapaParse/SheetJS, profiled, and stored as JSON under `data/` (gitignored).
+- **Query engine** (`lib/query.ts`) executes structured query specs — group-by with time-grain bucketing, aggregation (sum/avg/count/min/max/distinct), filters, top-N — so the AI targets a safe, validated spec instead of raw SQL.
+- **AI layer** (`lib/ai.ts`) — dashboard generation and chat editing via the Anthropic SDK with JSON-schema-constrained output; widget specs are validated against the dataset profile before use, with a heuristic fallback.
+- **Charts** — Apache ECharts with a colorblind-validated palette, separate light/dark themes following `prefers-color-scheme`.
 
-## Deploy on Vercel
+### Key files
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Path | Purpose |
+| --- | --- |
+| `lib/types.ts` | Dashboard/widget/query spec types shared by AI, engine, and UI |
+| `lib/parse.ts` | File parsing + column profiling |
+| `lib/query.ts` | In-memory aggregation engine |
+| `lib/ai.ts` | Claude prompts, schemas, validation, heuristic fallback |
+| `app/api/*` | Upload, generate, query, chat endpoints |
+| `components/Chart.tsx` | Widget spec + query result → ECharts option |
+| `components/DashboardView.tsx` | Dashboard page with widget grid and Copilot panel |
