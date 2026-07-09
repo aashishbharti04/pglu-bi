@@ -18,6 +18,14 @@ import {
 } from "@/lib/clientStore";
 import { newId } from "@/lib/id";
 import SettingsModal from "@/components/SettingsModal";
+import {
+  About,
+  ChartGallery,
+  CtaBand,
+  Faq,
+  HowItWorks,
+  TemplatesShowcase,
+} from "@/components/HomeSections";
 
 type Phase = "idle" | "parsing" | "choose" | "generating";
 
@@ -261,11 +269,20 @@ export default function Home() {
     <main className="home">
       <div className="hero-glow" aria-hidden />
 
-      <nav className="home-nav">
+      <nav className="home-nav" id="top">
         <span className="logo">
           <span className="logo-mark">◧</span> Pglu BI
         </span>
         <span className="nav-actions">
+          <a href="#templates" className="nav-link nav-anchor">
+            Templates
+          </a>
+          <a href="#how" className="nav-link nav-anchor">
+            How it works
+          </a>
+          <a href="#about" className="nav-link nav-anchor">
+            About
+          </a>
           <a
             href="https://github.com/aashishbharti04/pglu-bi"
             target="_blank"
@@ -411,6 +428,13 @@ export default function Home() {
               </div>
             ))}
           </section>
+
+          <HowItWorks />
+          <TemplatesShowcase />
+          <ChartGallery />
+          <About />
+          <Faq />
+          <CtaBand onSample={trySample} />
 
           {!keySaved && (
             <p className="key-hint rise rise-3 muted">
