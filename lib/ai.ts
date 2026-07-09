@@ -4,20 +4,23 @@ import type {
   DatasetMeta,
   Row,
   WidgetSpec,
-  WidgetType,
 } from "./types";
 import { runQuery } from "./query";
-import { newId } from "./store";
+import { newId } from "./id";
+import { getApiKey } from "./clientStore";
 
 const MODEL = "claude-opus-4-8";
 
 export function aiEnabled(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+  return Boolean(getApiKey());
 }
 
 function getClient(): Anthropic | null {
-  if (!aiEnabled()) return null;
-  return new Anthropic();
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+  // Calls go straight from the visitor's browser to Anthropic; the key
+  // lives only in their localStorage.
+  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 }
 
 // ---------- Structured output schemas ----------
@@ -256,7 +259,7 @@ export function heuristicDashboard(meta: DatasetMeta): {
     widgets,
     insights: [
       `Loaded ${meta.rowCount.toLocaleString()} rows with ${meta.columns.length} columns.`,
-      "Add ANTHROPIC_API_KEY to .env.local to enable AI-generated dashboards, insights, and chat editing.",
+      "Add your Anthropic API key on the home page to enable AI-generated dashboards, insights, and chat editing.",
     ],
   };
 }
@@ -330,7 +333,7 @@ export async function chatEditDashboard(
   if (!aiEnabled()) {
     return {
       reply:
-        "AI chat editing needs an Anthropic API key. Add ANTHROPIC_API_KEY to .env.local and restart the dev server.",
+        "AI chat editing needs an Anthropic API key. Add one on the home page (it stays in your browser).",
       ...current,
       widgets: dashboard.widgets,
     };

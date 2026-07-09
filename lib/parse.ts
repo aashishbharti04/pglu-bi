@@ -16,10 +16,13 @@ export function looksLikeDate(v: unknown): boolean {
   return !Number.isNaN(Date.parse(s.length === 7 ? s + "-01" : s));
 }
 
-export function parseFile(buffer: Buffer, filename: string): Row[] {
+export function parseFile(data: ArrayBuffer, filename: string): Row[] {
   const ext = filename.toLowerCase().split(".").pop() ?? "";
   if (ext === "xlsx" || ext === "xls") {
-    const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    const wb = XLSX.read(new Uint8Array(data), {
+      type: "array",
+      cellDates: true,
+    });
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
       defval: null,
@@ -34,13 +37,15 @@ export function parseFile(buffer: Buffer, filename: string): Row[] {
       return out;
     });
   }
+  const text = new TextDecoder().decode(data);
   if (ext === "json") {
-    const data = JSON.parse(buffer.toString("utf-8"));
-    if (!Array.isArray(data)) throw new Error("JSON file must be an array of objects");
-    return data as Row[];
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed))
+      throw new Error("JSON file must be an array of objects");
+    return parsed as Row[];
   }
   // CSV / TSV / TXT
-  const result = Papa.parse<Row>(buffer.toString("utf-8"), {
+  const result = Papa.parse<Row>(text, {
     header: true,
     dynamicTyping: true,
     skipEmptyLines: true,

@@ -95,6 +95,97 @@ a {
   font-size: 15px;
 }
 
+.sample-btn {
+  align-self: center;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13.5px;
+  cursor: pointer;
+  padding: 0;
+}
+.sample-btn:hover {
+  text-decoration: underline;
+}
+
+.key-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.key-section .card-title {
+  margin-bottom: 0;
+}
+.key-section .muted {
+  font-size: 12.5px;
+}
+.key-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.key-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+.key-row input:focus {
+  border-color: var(--accent);
+}
+.key-row button[type="submit"] {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.key-row button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.dash-list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dash-list-row .dash-list-item {
+  flex: 1;
+  min-width: 0;
+}
+.dash-list-row .link-btn {
+  color: var(--muted);
+  font-size: 14px;
+}
+.dash-list-row .link-btn:hover {
+  color: var(--error);
+  text-decoration: none;
+}
+
 .dash-list h2 {
   font-size: 15px;
   font-weight: 600;

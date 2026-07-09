@@ -4,8 +4,21 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { DashboardSpec } from "@/lib/types";
+import { parseFile, profileDataset } from "@/lib/parse";
+import { generateDashboard } from "@/lib/ai";
+import {
+  deleteDashboard,
+  getApiKey,
+  listDashboards,
+  saveDashboard,
+  saveDataset,
+  setApiKey,
+} from "@/lib/clientStore";
+import { newId } from "@/lib/id";
 
-type Phase = "idle" | "uploading" | "generating";
+type Phase = "idle" | "parsing" | "generating";
+
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 export default function Home() {
   const router = useRouter();
@@ -13,37 +26,35 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [dashboards, setDashboards] = useState<DashboardSpec[]>([]);
+  const [keyInput, setKeyInput] = useState("");
+  const [keySaved, setKeySaved] = useState(false);
 
   useEffect(() => {
-    fetch("/api/dashboards")
-      .then((r) => r.json())
-      .then(setDashboards)
-      .catch(() => {});
+    setDashboards(listDashboards());
+    setKeySaved(Boolean(getApiKey()));
   }, []);
 
-  const handleFile = useCallback(
-    async (file: File) => {
+  const handleData = useCallback(
+    async (data: ArrayBuffer, filename: string) => {
       setError(null);
-      setPhase("uploading");
+      setPhase("parsing");
       try {
-        const form = new FormData();
-        form.append("file", file);
-        const upload = await fetch("/api/datasets", {
-          method: "POST",
-          body: form,
-        });
-        const meta = await upload.json();
-        if (!upload.ok) throw new Error(meta.error ?? "Upload failed");
+        const rows = parseFile(data, filename);
+        if (rows.length === 0) throw new Error("The file contains no data rows");
+        const datasetId = newId();
+        const meta = profileDataset(datasetId, filename, rows);
+        saveDataset(meta, rows);
 
         setPhase("generating");
-        const gen = await fetch("/api/dashboards", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ datasetId: meta.id }),
-        });
-        const dashboard = await gen.json();
-        if (!gen.ok) throw new Error(dashboard.error ?? "Generation failed");
-        router.push(`/d/${dashboard.id}`);
+        const generated = await generateDashboard(meta, rows);
+        const dashboard: DashboardSpec = {
+          id: newId(),
+          datasetId,
+          createdAt: new Date().toISOString(),
+          ...generated,
+        };
+        saveDashboard(dashboard);
+        router.push(`/dashboard?id=${dashboard.id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
         setPhase("idle");
@@ -52,13 +63,23 @@ export default function Home() {
     [router]
   );
 
+  const handleFile = useCallback(
+    async (file: File) => handleData(await file.arrayBuffer(), file.name),
+    [handleData]
+  );
+
+  const trySample = useCallback(async () => {
+    const res = await fetch(`${BASE_PATH}/sample-sales.csv`);
+    handleData(await res.arrayBuffer(), "sample-sales.csv");
+  }, [handleData]);
+
   return (
     <main className="home">
       <header className="home-header">
         <h1>Pglu BI</h1>
         <p className="muted">
           Upload a data file — AI profiles it, builds a dashboard, and lets you
-          refine it by chat.
+          refine it by chat. Everything stays in your browser.
         </p>
       </header>
 
@@ -95,7 +116,7 @@ export default function Home() {
             <div className="muted">CSV, Excel (.xlsx), or JSON</div>
           </>
         )}
-        {phase === "uploading" && (
+        {phase === "parsing" && (
           <div className="dropzone-title">Parsing and profiling data…</div>
         )}
         {phase === "generating" && (
@@ -103,21 +124,84 @@ export default function Home() {
         )}
       </label>
 
+      {phase === "idle" && (
+        <button className="sample-btn" onClick={trySample}>
+          Or try it with sample sales data →
+        </button>
+      )}
+
       {error && <p className="error-text">{error}</p>}
+
+      <section className="key-section">
+        <div className="card-title">Anthropic API key</div>
+        {keySaved ? (
+          <p className="muted key-row">
+            AI features enabled — key stored in this browser only.{" "}
+            <button
+              className="link-btn"
+              onClick={() => {
+                setApiKey("");
+                setKeySaved(false);
+              }}
+            >
+              Remove key
+            </button>
+          </p>
+        ) : (
+          <>
+            <p className="muted">
+              Optional. Enables AI-designed dashboards, insights, and chat
+              editing. The key is stored only in your browser and sent only to
+              Anthropic.
+            </p>
+            <form
+              className="key-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (keyInput.trim()) {
+                  setApiKey(keyInput);
+                  setKeyInput("");
+                  setKeySaved(true);
+                }
+              }}
+            >
+              <input
+                type="password"
+                value={keyInput}
+                onChange={(e) => setKeyInput(e.target.value)}
+                placeholder="sk-ant-…"
+              />
+              <button type="submit" disabled={!keyInput.trim()}>
+                Save
+              </button>
+            </form>
+          </>
+        )}
+      </section>
 
       {dashboards.length > 0 && (
         <section className="dash-list">
           <h2>Dashboards</h2>
           <ul>
             {dashboards.map((d) => (
-              <li key={d.id}>
-                <Link href={`/d/${d.id}`} className="dash-list-item">
+              <li key={d.id} className="dash-list-row">
+                <Link href={`/dashboard?id=${d.id}`} className="dash-list-item">
                   <span>{d.name}</span>
                   <span className="muted">
                     {d.widgets.length} widgets ·{" "}
                     {new Date(d.createdAt).toLocaleDateString()}
                   </span>
                 </Link>
+                <button
+                  className="link-btn"
+                  title="Delete dashboard"
+                  onClick={() => {
+                    deleteDashboard(d.id);
+                    setDashboards(listDashboards());
+                  }}
+                >
+                  ✕
+                </button>
               </li>
             ))}
           </ul>

@@ -2,29 +2,42 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { DashboardSpec, DatasetMeta } from "@/lib/types";
+import { useSearchParams } from "next/navigation";
+import type { DashboardSpec, DatasetMeta, Row } from "@/lib/types";
+import { getDashboard, getDataset, saveDashboard } from "@/lib/clientStore";
 import { useDarkMode } from "@/lib/useDarkMode";
 import Widget from "./Widget";
 import ChatPanel from "./ChatPanel";
 
-export default function DashboardView({ id }: { id: string }) {
+export default function DashboardView() {
+  const id = useSearchParams().get("id") ?? "";
   const [dashboard, setDashboard] = useState<DashboardSpec | null>(null);
-  const [dataset, setDataset] = useState<DatasetMeta | null>(null);
+  const [dataset, setDataset] = useState<{
+    meta: DatasetMeta;
+    rows: Row[];
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isDark = useDarkMode();
 
   useEffect(() => {
-    fetch(`/api/dashboards/${id}`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json()).error ?? "Not found");
-        return r.json();
-      })
-      .then((data) => {
-        setDashboard(data.dashboard);
-        setDataset(data.dataset);
-      })
-      .catch((e) => setError(e.message));
+    const d = getDashboard(id);
+    if (!d) {
+      setError("Dashboard not found in this browser.");
+      return;
+    }
+    const ds = getDataset(d.datasetId);
+    if (!ds) {
+      setError("The dataset for this dashboard is no longer stored.");
+      return;
+    }
+    setDashboard(d);
+    setDataset(ds);
   }, [id]);
+
+  function handleUpdate(updated: DashboardSpec) {
+    saveDashboard(updated);
+    setDashboard(updated);
+  }
 
   if (error) {
     return (
@@ -34,7 +47,7 @@ export default function DashboardView({ id }: { id: string }) {
       </main>
     );
   }
-  if (!dashboard) {
+  if (!dashboard || !dataset) {
     return (
       <main className="page-center">
         <p className="muted">Loading dashboard…</p>
@@ -51,12 +64,10 @@ export default function DashboardView({ id }: { id: string }) {
               ← Pglu BI
             </Link>
             <h1>{dashboard.name}</h1>
-            {dataset && (
-              <p className="muted">
-                {dataset.name} · {dataset.rowCount.toLocaleString()} rows ·{" "}
-                {dataset.columns.length} columns
-              </p>
-            )}
+            <p className="muted">
+              {dataset.meta.name} · {dataset.meta.rowCount.toLocaleString()}{" "}
+              rows · {dataset.meta.columns.length} columns
+            </p>
           </div>
         </header>
 
@@ -76,13 +87,19 @@ export default function DashboardView({ id }: { id: string }) {
             <Widget
               key={w.id}
               widget={w}
-              datasetId={dashboard.datasetId}
+              meta={dataset.meta}
+              rows={dataset.rows}
               isDark={isDark}
             />
           ))}
         </section>
       </main>
-      <ChatPanel dashboardId={dashboard.id} onDashboardUpdate={setDashboard} />
+      <ChatPanel
+        dashboard={dashboard}
+        meta={dataset.meta}
+        rows={dataset.rows}
+        onDashboardUpdate={handleUpdate}
+      />
     </div>
   );
 }

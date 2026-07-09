@@ -1,7 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { ChatMessage, DashboardSpec } from "@/lib/types";
+import type {
+  ChatMessage,
+  DashboardSpec,
+  DatasetMeta,
+  Row,
+} from "@/lib/types";
+import { chatEditDashboard } from "@/lib/ai";
 
 const SUGGESTIONS = [
   "Change the main chart to a line chart",
@@ -11,10 +17,14 @@ const SUGGESTIONS = [
 ];
 
 export default function ChatPanel({
-  dashboardId,
+  dashboard,
+  meta,
+  rows,
   onDashboardUpdate,
 }: {
-  dashboardId: string;
+  dashboard: DashboardSpec;
+  meta: DatasetMeta;
+  rows: Row[];
   onDashboardUpdate: (d: DashboardSpec) => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -29,15 +39,14 @@ export default function ChatPanel({
     setBusy(true);
     setMessages((m) => [...m, { role: "user", text: message }]);
     try {
-      const res = await fetch(`/api/dashboards/${dashboardId}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+      const result = await chatEditDashboard(meta, rows, dashboard, message);
+      setMessages((m) => [...m, { role: "assistant", text: result.reply }]);
+      onDashboardUpdate({
+        ...dashboard,
+        name: result.name,
+        widgets: result.widgets,
+        insights: result.insights,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Chat failed");
-      setMessages((m) => [...m, { role: "assistant", text: data.reply }]);
-      if (data.dashboard) onDashboardUpdate(data.dashboard);
     } catch (err) {
       setMessages((m) => [
         ...m,
