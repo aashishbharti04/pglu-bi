@@ -26,7 +26,9 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
-      - run: npm ci
+      # npm install rather than npm ci: the lockfile is generated on Windows
+      # and npm omits platform-gated optional deps the Linux runner expects.
+      - run: npm install --no-audit --no-fund
       - run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: /pglu-bi
