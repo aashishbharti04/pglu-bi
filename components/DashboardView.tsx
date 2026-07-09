@@ -19,6 +19,7 @@ import { newId } from "@/lib/id";
 import Widget from "./Widget";
 import ChatPanel from "./ChatPanel";
 import FilterBar, { EMPTY_FILTERS, type FilterState } from "./FilterBar";
+import SettingsModal from "./SettingsModal";
 
 const THEME_LABEL: Record<ThemeMode, string> = {
   system: "◐ Auto",
@@ -42,6 +43,7 @@ export default function DashboardView() {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { isDark, mode, setMode } = useTheme();
 
   useEffect(() => {
@@ -195,8 +197,20 @@ export default function DashboardView() {
             >
               {THEME_LABEL[mode]}
             </button>
+            <button
+              className="header-btn"
+              onClick={() => setSettingsOpen(true)}
+              title="Settings"
+            >
+              ⚙
+            </button>
           </div>
         </header>
+
+        <SettingsModal
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+        />
 
         <FilterBar
           meta={dataset.meta}

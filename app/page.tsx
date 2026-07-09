@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { DashboardSpec, DatasetMeta, Row } from "@/lib/types";
 import { parseFile, profileDataset } from "@/lib/parse";
-import { aiEnabled, generateDashboard } from "@/lib/ai";
+import { generateDashboard } from "@/lib/ai";
 import { buildTemplate, TEMPLATES, type TemplateId } from "@/lib/templates";
 import { parseBundle } from "@/lib/export";
 import { useTheme, type ThemeMode } from "@/lib/useDarkMode";
@@ -15,9 +15,9 @@ import {
   listDashboards,
   saveDashboard,
   saveDataset,
-  setApiKey,
 } from "@/lib/clientStore";
 import { newId } from "@/lib/id";
+import SettingsModal from "@/components/SettingsModal";
 
 type Phase = "idle" | "parsing" | "choose" | "generating";
 
@@ -138,8 +138,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [dashboards, setDashboards] = useState<DashboardSpec[]>([]);
-  const [keyInput, setKeyInput] = useState("");
   const [keySaved, setKeySaved] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     setDashboards(listDashboards());
@@ -281,8 +281,21 @@ export default function Home() {
           >
             {THEME_LABEL[mode]}
           </button>
+          <button
+            className="header-btn"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+          >
+            ⚙ Settings
+          </button>
         </span>
       </nav>
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onKeyChange={setKeySaved}
+      />
 
       {phase === "choose" && pending ? (
         <section className="template-picker rise">
@@ -301,9 +314,9 @@ export default function Home() {
               <span className="template-icon">✨</span>
               <span className="template-name">AI designed</span>
               <span className="template-desc muted">
-                {aiEnabled()
+                {keySaved
                   ? "Claude picks the best layout, charts, and insights for this data."
-                  : "No API key set — falls back to the Executive template."}
+                  : "No API key set (see Settings) — falls back to the Executive template."}
               </span>
             </button>
             {TEMPLATES.map((t) => (
@@ -399,52 +412,16 @@ export default function Home() {
             ))}
           </section>
 
-          <section className="key-section rise rise-3">
-            <div className="card-title">Anthropic API key</div>
-            {keySaved ? (
-              <p className="muted key-row">
-                AI features enabled — key stored in this browser only.{" "}
-                <button
-                  className="link-btn"
-                  onClick={() => {
-                    setApiKey("");
-                    setKeySaved(false);
-                  }}
-                >
-                  Remove key
-                </button>
-              </p>
-            ) : (
-              <>
-                <p className="muted">
-                  Optional. Enables AI-designed dashboards, insights, and chat
-                  editing. The key is stored only in your browser and sent only
-                  to Anthropic.
-                </p>
-                <form
-                  className="key-row"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (keyInput.trim()) {
-                      setApiKey(keyInput);
-                      setKeyInput("");
-                      setKeySaved(true);
-                    }
-                  }}
-                >
-                  <input
-                    type="password"
-                    value={keyInput}
-                    onChange={(e) => setKeyInput(e.target.value)}
-                    placeholder="sk-ant-…"
-                  />
-                  <button type="submit" disabled={!keyInput.trim()}>
-                    Save
-                  </button>
-                </form>
-              </>
-            )}
-          </section>
+          {!keySaved && (
+            <p className="key-hint rise rise-3 muted">
+              ✦ Want AI-designed dashboards and chat editing? Add your
+              Anthropic API key in{" "}
+              <button className="link-btn" onClick={() => setSettingsOpen(true)}>
+                Settings
+              </button>
+              . It stays in your browser.
+            </p>
+          )}
 
           <footer className="home-footer muted">
             <span>

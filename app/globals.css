@@ -363,6 +363,111 @@ a {
   color: var(--accent);
 }
 
+/* Key hint */
+.key-hint {
+  font-size: 13px;
+  text-align: center;
+  padding: 12px 16px;
+  border: 1px dashed var(--grid);
+  border-radius: 10px;
+}
+
+/* Settings modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10vh 20px 20px;
+  animation: fadein 0.15s ease-out;
+}
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+}
+.modal {
+  width: 100%;
+  max-width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+  animation: rise 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-head h2 {
+  font-size: 16px;
+  font-weight: 650;
+}
+.modal-close {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+}
+.modal-close:hover {
+  color: var(--text-primary);
+}
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-group .muted {
+  font-size: 12.5px;
+}
+.theme-options {
+  display: flex;
+  gap: 8px;
+}
+.theme-option {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.theme-option:hover {
+  border-color: var(--accent);
+}
+.theme-option.selected {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.danger-btn {
+  align-self: flex-start;
+  padding: 8px 12px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--error);
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.danger-btn:hover {
+  border-color: var(--error);
+}
+
 /* Entrance animation */
 .rise {
   animation: rise 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) backwards;

@@ -237,7 +237,7 @@ export function heuristicDashboard(
     name: meta.name.replace(/\.[^.]+$/, ""),
     insights: [
       ...built.insights,
-      "Add your Anthropic API key on the home page to enable AI-designed dashboards, richer insights, and chat editing.",
+      "Add your Anthropic API key in Settings (⚙) to enable AI-designed dashboards, richer insights, and chat editing.",
     ],
   };
 }
@@ -311,7 +311,7 @@ export async function chatEditDashboard(
   if (!aiEnabled()) {
     return {
       reply:
-        "AI chat editing needs an Anthropic API key. Add one on the home page (it stays in your browser).",
+        "AI chat editing needs an Anthropic API key. Add one in Settings (the ⚙ button in the header) — it stays in your browser.",
       ...current,
       widgets: dashboard.widgets,
     };
